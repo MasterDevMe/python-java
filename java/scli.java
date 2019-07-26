@@ -246,7 +246,8 @@ class test {
     }
     // res = System.in;
 
-  } 
+  }
+  
 }
 public class scli {
   public static void main(String[] args) {

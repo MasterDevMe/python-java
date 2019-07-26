@@ -3,6 +3,7 @@ import zmq
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import datetime
 import time
 import numpy as np
 import pickle
@@ -173,7 +174,7 @@ class SCLI:
 
 
         print('Setting reference...')
-        time.sleep(2.0)
+        # time.sleep(2.0)
         ts, s1, s1o, s2, s2o, temp = self.retrieve_data(time_window=5.0)
         s1ref = np.mean(removeOutliers(s1))
         s2ref = np.mean(removeOutliers(s2))
@@ -189,7 +190,7 @@ class SCLI:
         wt = []
         plt.ion()
         fig, ax = plt.subplots(1, 1)
-
+        print(plt.get_fignums());
         while plt.get_fignums():
             ts, s1, s1o, s2, s2o, temp = self.retrieve_data(time_window=sampletime, disp=False)
             ds1 = (np.mean(s1) - s1ref)
@@ -476,36 +477,54 @@ class SCLI:
                     self.wtFit()
 
     def retrieve_data(self, time_window=0.0, disp=True):
-        self.datasocket.connect("tcp://localhost:{}".format(self.dataport))
-        self.datasocket.setsockopt(zmq.SUBSCRIBE, "10000")
-        #flush cache
+        # self.datasocket.connect("tcp://localhost:{}".format(self.dataport))
+        # self.datasocket.setsockopt(zmq.SUBSCRIBE, "10000")
+        # flush cache
         t1 = time.time()
-        while(time.time()-t1 < 0.1):
-            t1 = time.time()
-            d = self.datasocket.recv()
-            # topic, data = d.split()
-            # ts, s1, s1offset, s2, s2offset, temp = data.split(',')
+        # while(time.time()-t1 < 0.1):
+        #     t1 = time.time()
+        #     d = self.datasocket.recv()
+        #     # topic, data = d.split()
+        #     # ts, s1, s1offset, s2, s2offset, temp = data.split(',')
 
+        sample = [
+            "11:46:28, 26647.00, 28276.00, 170357.00, 173036.00, 26.25",
+            "11:46:30, 26438.00, 26552.00, 170138.00, 170222.00, 26.00",
+            "11:46:32, 26487.00, 26552.00, 170215.00, 170222.00, 26.25",
+            "11:46:34, 26377.00, 26552.00, 170124.00, 170222.00, 26.25",
+            "11:46:36, 43513.00, 26552.00, 182605.00, 170222.00, 26.50"
+        ]
 
         TS, S1, S1OS, S2, S2OS, TEMP = [], [], [], [], [], []
-        while(True):
-            if disp:
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            d = self.datasocket.recv()
-            topic, data = d.split()
+        # while(True):
+        for data in sample:
+            # if disp:
+                # sys.stdout.write('.')
+                # sys.stdout.flush()
+            # d = self.datasocket.recv()
+            # topic, data = d.split()
             ts, s1, s1offset, s2, s2offset, temp = data.split(',')
-            TS.append(float(ts))
+            # TS.append(float(ts))
+            # print(datetime.datetime.strptime(ts, '%H:%M:%S'))
+            TS.append(float(time.mktime(datetime.datetime.strptime(ts, '%H:%M:%S').timetuple())))
             S1.append(float(s1))
             S1OS.append(float(s1offset))
             S2.append(float(s2))
             S2OS.append(float(s2offset))
             TEMP.append(float(temp))
 
-            if TS[-1]-t1 > time_window:
-                break
+            # if TS[-1]-t1 > time_window:
+            #     break
+
+        # print(TS)
+        # print(S1)
+        # print(S1OS)
+        # print(S2)
+        # print(S2OS)
+        # print(TEMP)
+
         sys.stdout.write('\n')
-        self.datasocket.disconnect("tcp://localhost:{}".format(self.dataport))
+        # self.datasocket.disconnect("tcp://localhost:{}".format(self.dataport))
         return TS, S1, S1OS, S2, S2OS, TEMP
 
     def posFit(self):
