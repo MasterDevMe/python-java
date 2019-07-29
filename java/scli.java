@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.Socket;
 import java.sql.*;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 import java.util.*;
 class test {
   private Map<String, ArrayList<Float>> caldata;
@@ -11,9 +12,6 @@ class test {
   public Vector retrieve_data(float time_window, boolean disp) throws Exception {
     Socket datasocket = new Socket("http://localhost", 8000);
 
-    // self.datasocket.connect("tcp://localhost:{}".format(self.dataport))
-    // self.datasocket.setsockopt(zmq.SUBSCRIBE, "10000")
-    // #flush cache
     Date date = new Date();
     long t1 = date.getTime();
     String d = "";
@@ -29,7 +27,6 @@ class test {
     ArrayList S2OS = new ArrayList<Float>();
     ArrayList TEMP = new ArrayList<Float>();
 
-    // , S1, S1OS, S2, S2OS, TEMP = new ArrayList<Float>();
     while (true) {
       if (disp) {
         System.out.println(".");
@@ -61,8 +58,7 @@ class test {
         break;
     }
     System.out.println();
-    // self.datasocket.disconnect("tcp://localhost:{}".format(self.dataport));
-    // ArrayList<ArrayList
+
     Vector result_array = new Vector<ArrayList>();
     result_array.add(TS);
     result_array.add(S1);
@@ -71,14 +67,13 @@ class test {
     result_array.add(S2OS);
     result_array.add(TEMP);
     datasocket.close();
-    // float[][] arrays = new float[][] { TS, S1, S1OS, S2, S2OS, TEMP };
+
     return result_array;
 
   }
 
   public ArrayList<Float> removeOutliers(ArrayList<Float> S1) {
     ArrayList<Float> So = S1;
-    // this.deepCopy(S1.toArray());
   
     int n = 5;
     float nsig = 3.0f;
@@ -141,8 +136,6 @@ class test {
     float m = coefs.get(7);
     float A = a * k - c * f;
     float B = b * k + a * (m - s2) - c * g - f * (d - s1);
-    // A = a*k - c*f
-    // B = b*k + a*(m-s2) - c*g - f*(d-s1)
     float C = b * (m - s2) - g * (d - s1);
 
     ArrayList res = new ArrayList<Float>();
@@ -172,13 +165,11 @@ class test {
       return;
     }
 
-
     System.out.print("Set Weight Refrence and <Enter> (q to quit)");
     char res = (char) System.in.read();
     if (res == 'q') {
       return;
     }
-
 
     Vector<ArrayList<Float>> arr_retrieve_data = this.retrieve_data(inttime, true);
     ArrayList<Float> ts = (ArrayList)arr_retrieve_data.get(0);
@@ -248,6 +239,101 @@ class test {
 
   }
   
+  public void statistical_weight(float sampletime) throws Exception {
+    if(sampletime == -1.0f)
+      sampletime = 1.0f;
+    ArrayList<Float> coefs;
+    try{
+      coefs = this.caldata.get("cal");
+    }catch(Exception ex) {
+      System.err.println("ERROR: Calibration not updated...");
+      return;
+    } 
+
+    System.out.print("Setting reference...");
+
+    try{
+      TimeUnit.SECONDS.sleep(2);
+    } catch(Exception e) {
+      System.err.println(e.toString());
+    }
+    Vector<ArrayList<Float>> data_retireve = this.retrieve_data(5.0f, true);
+    ArrayList<Float> ts = data_retireve.get(0);
+    ArrayList<Float> s1 = data_retireve.get(1);
+    ArrayList<Float> s1o = data_retireve.get(2);
+    ArrayList<Float> s2 = data_retireve.get(3);
+    ArrayList<Float> s2o = data_retireve.get(4);
+    ArrayList<Float> temp = data_retireve.get(5);
+
+    ArrayList<Float> removeResult1 = this.removeOutliers(s1);
+    ArrayList<Float> removeResult2 = this.removeOutliers(s2);
+
+    float sum1 = 0.0f, sum2 = 0.0f;
+    for(int i =0 ; i<removeResult1.size(); i ++) {
+      sum1 += removeResult1.get(i);
+    }
+
+    for(int i =0 ; i<removeResult2.size(); i ++) {
+      sum2 += removeResult2.get(i);
+    }
+
+    float s1ref = sum1 / removeResult1.size();
+    float s2ref = sum2 / removeResult2.size();
+    System.out.print("Place Weight and <Enter>");
+    char res = (char) System.in.read();
+    if (res == 'q') {
+      return;
+    }
+    System.out.println("Starting...");
+
+    Date date = new Date();
+    long t1 = date.getTime();
+    long dt = date.getTime() - t1;
+
+    data_retireve = this.retrieve_data(sampletime, false);
+    ts = (ArrayList)data_retireve.get(0);
+    s1 = (ArrayList)data_retireve.get(1);
+    s1o = (ArrayList)data_retireve.get(2);
+    s2 = (ArrayList)data_retireve.get(3);
+    s2o = (ArrayList)data_retireve.get(4);
+    temp = (ArrayList)data_retireve.get(5);
+
+    sum1 = 0.0f; sum2 = 0.0f;
+    
+    for(int i =0 ; i<s1.size(); i ++) {
+      sum1 += s1.get(i);
+    }
+
+    for(int i =0 ; i<s2.size(); i ++) {
+      sum2 += s2.get(i);
+    }
+
+    float ds1 = sum1 / s1.size() - s1ref;
+    float ds2 = sum2 / s2.size() - s2ref;
+
+    ArrayList<Float> solveResult = this.solve(ds1, ds2, coefs);
+    float wt = Math.max(solveResult.get(0), solveResult.get(1));
+    System.out.println("\033[F");
+    System.out.println("\033[K");
+    System.out.println("Weight: {" +  Float.toString(wt) + "} g.");
+
+  }
+
+  public String fileRead(String filename) {
+    String result = "";
+    try{
+      BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename)));
+      String line = reader.readLine();
+      while(line != null){
+          // System.out.println(line);
+          result += line;
+          line = reader.readLine();
+      }     
+    }catch(Exception ex) {
+      System.err.println("ERROR: File Not Found....");
+    }
+    return result;
+  }
 }
 public class scli {
   public static void main(String[] args) {
@@ -263,12 +349,15 @@ public class scli {
     res.add((float)79.0);
     res.add((float)15.0);
     // System.out.println(test1.solve((float)1.0, (float)2.0, res));
-    System.out.println(test1.removeOutliers(res));
-    try {
-		  test1.continouse_weight(-1.0f, -1.0f);
-    } catch (Exception e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
+    // System.out.println(test1.removeOutliers(res));
+    // try {
+		//   test1.continouse_weight(-1.0f, -1.0f);
+    // } catch (Exception e) {
+    //   // TODO Auto-generated catch block
+    //   e.printStackTrace();
+    // }
+
+    // test1.statistical_weight(1.0f);
+    System.out.println(test1.fileRead("../caltest.p"));
   }
 }
